@@ -1,0 +1,90 @@
+#!/bin/bash
+
+#PBS -P alphafold_project_name
+#PBS -j oe
+#PBS -N alphafold_monomer_reduceddbs
+#PBS -q volta_gpu
+#PBS -l select=1:ncpus=10:mem=142gb:ngpus=2
+#PBS -l walltime=24:00:00
+
+
+source /etc/profile.d/rec_modules.sh
+cd $PBS_O_WORKDIR;
+nvidia-smi
+module load singularity
+JOBID=`echo ${PBS_JOBID} | cut -d'.' -f1`
+JOBDATE=$(date +%Y-%m-%d --date="today")
+
+## User settings
+INPUT_FASTA_FILE_PATH=7WVI_1.fasta;   ## "my_abc123.fasta" is your input *.fasta file.
+
+
+MAX_TEMPLATE_DATE='2021-07-2' 		# yyyy-mm-dd format
+MULTIMER_PREDICTIONS_PER_MODEL=2
+DB_PRESET=reduced_dbs     		# db_presets: full_dbs, reduced_dbs
+MODEL_PRESET='monomer' 			# model_preset: monomer, monomer_casp14, monomer_ptm, multimer
+
+# Define and create output directory
+OUTPUT_DIR="$(pwd)/output/${JOBID}_af231_${MODEL_PRESET}_${DB_PRESET}";     ## define output folder name.
+mkdir -p ${OUTPUT_DIR}
+
+
+## Might not need to change until there is a newer version ##
+## Change this to a newer alphafold container when it is released
+IMAGE=/app1/common/singularity-img/3.0.0/alphafold/alphafold_v2.3.1_cuda11.1.sif
+
+## DO NOT CHANGE ##
+# Params and DB paths
+ALPHAFOLD_DATA_PATH=/scratch2/biodata/alphafold/database/
+ALPHAFOLD_MODELS=/scratch2/biodata/alphafold/database/params
+
+## Do not remove ##
+mkdir -p alphafold/common
+cp -n /scratch2/biodata/alphafold/setup_files/stereo_chemical_props.txt alphafold/common/
+
+##--- To start & run Alphafold2 in Singularity container. ----
+
+export SINGULARITYENV_LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/.singularity.d/libs # workaround for JAX looking for libcusolver in wrong directory
+
+export SINGULARITYENV_TF_FORCE_UNIFIED_MEMORY=1
+export SINGULARITYENV_XLA_PYTHON_CLIENT_MEM_FRACTION=2
+export SINGULARITYENV_OPENMM_CPU_THREADS=10 
+export SINGULARITYENV_MAX_CPUS=10 
+
+singularity run --cleanenv --nv \
+ --bind /scratch2 \
+ -B $ALPHAFOLD_DATA_PATH:/data \
+ -B $ALPHAFOLD_MODELS \
+ -B .:/etc \
+ --pwd `pwd` $IMAGE  \
+ --data_dir=/data \
+ --output_dir=$OUTPUT_DIR  \
+ --fasta_paths=$INPUT_FASTA_FILE_PATH  \
+ --uniref90_database_path=/data/uniref90/uniref90.fasta  \
+ --mgnify_database_path=/data/mgnify/mgy_clusters.fa   \
+ --small_bfd_database_path=/data/small_bfd/bfd-first_non_consensus_sequences.fasta \
+ --template_mmcif_dir=/data/pdb_mmcif/mmcif_files  \
+ --pdb70_database_path=/data/pdb70/pdb70  \
+ --obsolete_pdbs_path=/data/pdb_mmcif/obsolete.dat \
+ --num_multimer_predictions_per_model=$MULTIMER_PREDICTIONS_PER_MODEL \
+ --model_preset=$MODEL_PRESET \
+ --max_template_date=$MAX_TEMPLATE_DATE \
+ --run_relax=True \
+ --use_gpu_relax=True \
+ --db_preset=$DB_PRESET > ${OUTPUT_DIR}/stdout.${JOBID} 2>&1
+ --pdb70_database_path=/data/pdb70/pdb70  \
+
+## Additional DB paths/flags to include if using multimer
+# --small_bfd_database_path=/data/small_bfd/bfd-first_non_consensus_sequences.fasta \
+#  --pdb_seqres_database_path=/data/pdb_seqres/pdb_seqres.txt \
+#  --uniprot_database_path=/data/uniprot/uniprot.fasta \
+
+## Additional DB path/flags to include is using monomer/not multimer
+
+
+###----------------------------------------------------------------------------------------------------
+### Configure MAX_TEMPLATE_DATE in 'yyyy-mm-dd' format to set the cutoff time point 
+### prior to the release date of structures.
+###
+###----------------------------------------------------------------------------------------------------
+##------ Script Ends Here. ------
