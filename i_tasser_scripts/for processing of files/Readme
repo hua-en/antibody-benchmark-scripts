@@ -1,0 +1,6 @@
+This folder contains the code used for processing the outputs of I-TASSER 5.2 from HPC, as well as configures fasta files for running on HPC
+
+> Fasta prep for HPC.ipynb is used to seperate the files into sequences and places them in a folder which allows them to be recognised by I-TASSER 5.2
+> HPC_to_tmalign.ipynb contains functions that extracts the models from the HPC output and renames the file to that of the sequence name
+> tmalign+excel.py runs tm-align on linux for the whole dataset, and outputs the results to a .xlsx file. tm-align and pandas must be installed
+> tmalign_python_modified.py runs tmalign on linux
